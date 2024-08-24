@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://1tpy4wtseeo6"]
+
+[ext_resource type="Script" path="res://Chunk/Chunk.cs" id="1_xhkjg"]
+
+[sub_resource type="PolygonOccluder3D" id="PolygonOccluder3D_nf54g"]
+
+[node name="Chunk" type="MeshInstance3D"]
+script = ExtResource("1_xhkjg")
+
+[node name="OccluderInstance3D" type="OccluderInstance3D" parent="."]
+occluder = SubResource("PolygonOccluder3D_nf54g")
