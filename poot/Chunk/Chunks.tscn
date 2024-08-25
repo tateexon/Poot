@@ -1,9 +1,11 @@
-[gd_scene load_steps=8 format=3 uid="uid://03elk3xge8pj"]
+[gd_scene load_steps=10 format=3 uid="uid://03elk3xge8pj"]
 
 [ext_resource type="Script" path="res://Chunk/Chunks.cs" id="1_se3pe"]
 [ext_resource type="Script" path="res://FlyCamera.cs" id="2_k7kt6"]
 [ext_resource type="PackedScene" uid="uid://1tpy4wtseeo6" path="res://Chunk/Chunk.tscn" id="3_awrud"]
-[ext_resource type="Script" path="res://FPSLabel.cs" id="4_piw7l"]
+[ext_resource type="Script" path="res://scripts/debug/FPSLabel.cs" id="4_rtd6f"]
+[ext_resource type="Script" path="res://scripts/debug/TerrainDebug.cs" id="5_3uldg"]
+[ext_resource type="Script" path="res://scripts/debug/MeshDebug.cs" id="6_cm3if"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_of430"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -31,14 +33,29 @@ transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -
 shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 47.45, 50)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, 15)
 script = ExtResource("2_k7kt6")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="DebugCanvasLayer" type="CanvasLayer" parent="."]
 
-[node name="Label" type="Label" parent="CanvasLayer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="DebugCanvasLayer"]
 offset_right = 40.0
-offset_bottom = 23.0
-theme_override_font_sizes/font_size = 64
-text = "hello"
-script = ExtResource("4_piw7l")
+offset_bottom = 40.0
+
+[node name="FPS" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "FPS"
+script = ExtResource("4_rtd6f")
+
+[node name="Terrain" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Terrain"
+script = ExtResource("5_3uldg")
+
+[node name="Mesh" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Mesh"
+script = ExtResource("6_cm3if")

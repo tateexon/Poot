@@ -1,14 +1,14 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 
-public partial class TerrainWorker
+public class TerrainWorker
 {
 	public static List<Vector3I> queue = new List<Vector3I>();
 	private static object lockObject = new object();
 	private static AutoResetEvent itemAddedEvent = new AutoResetEvent(false);
-	private static AutoResetEvent waitForReorderEvent = new AutoResetEvent(true);
 	private static bool isRunning = true;
 
 	// example start
@@ -30,9 +30,8 @@ public partial class TerrainWorker
 			{
 				Vector3I? item = null;
 
-				// If reorder is requested, wait for it to complete
-				waitForReorderEvent.WaitOne();
-
+				//Stopwatch sw = new Stopwatch();
+				//sw.Start();
 				// Get the next item to process
 				lock (lockObject)
 				{
@@ -40,6 +39,7 @@ public partial class TerrainWorker
 					{
 						item = queue[0];
 						queue.RemoveAt(0);
+						EventManager.TerrainWorker_CountEvent?.Invoke(queue.Count);
 					}
 				}
 
@@ -47,8 +47,12 @@ public partial class TerrainWorker
 				{
 					break; // Queue was empty, go back to waiting for new items
 				}
-
 				ProcessItem(item.Value);
+			//	sw.Stop();
+			//	TimeSpan ts = sw.Elapsed;
+			//	string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+			//ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+			//	GD.Print("RunTime " + elapsedTime);
 			}
 		}
 	}
@@ -72,18 +76,15 @@ public partial class TerrainWorker
 
 	public static void UpdateList(List<Vector3I> newQueue)
 	{
-		waitForReorderEvent.Reset(); // Block the worker thread from processing items
-
 		lock (lockObject)
 		{
 			queue = newQueue;
 		}
 
-		waitForReorderEvent.Set(); // Allow the worker thread to continue processing
 		itemAddedEvent.Set(); // Signal the worker thread to start processing the updated list
 	}
 
-	static void StopWorker()
+	public static void StopWorker()
 	{
 		isRunning = false;
 		itemAddedEvent.Set(); // Ensure the worker thread exits the wait state
@@ -91,6 +92,16 @@ public partial class TerrainWorker
 
 	static void ProcessItem(Vector3I item)
 	{
-		Console.WriteLine($"Processing {item}");
+		if (Chunks.ChunksData.ContainsKey(item)) { return; }
+		ChunkData data = new ChunkData(item);
+		if (!Chunks.heightMaps.ContainsKey(item))
+		{
+			Chunks.heightMaps.Add(item, data.GenerateHeightMap());
+		}
+		int[,] heightMap = Chunks.heightMaps[item];
+		data.GenerateTerrain(ref heightMap);
+		if (Chunks.ChunksData.ContainsKey(item)) { return; }
+		Chunks.ChunksData.Add(item, data);
+		MeshWorker.EnqueueItem(Chunks.ChunksData[item]);
 	}
 }

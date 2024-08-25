@@ -1,14 +1,25 @@
 using Godot;
-using Godot.Collections;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
 
 public partial class Chunks : Node3D
 {
+	private static Dictionary<Vector3I, Chunk> ChunksMesh = new Dictionary<Vector3I, Chunk>();
+	public static object ChunksMeshLock = new object();
+	public static Dictionary<Vector3I, ChunkData> ChunksData = new Dictionary<Vector3I, ChunkData>();
+	public static Dictionary<Vector3I, int[,]> heightMaps = new Dictionary<Vector3I, int[,]>();
+	public static Queue<Vector3I> ChunksReadyToShow = new Queue<Vector3I>();
 
-	[Export] public Dictionary<Vector3I, Chunk> chunks = new Dictionary<Vector3I, Chunk>();
 	[Export] public PackedScene chunkScene;
 
-	[Export] public Vector3I ChunksAroundMe = new Vector3I(3, 3, 3);
+	public static Vector3I Dimensions = new Vector3I(12, 9, 12);
+
 	[Export] public Camera3D Camera;
+
+	private Thread terrainWorkerThread;
+	private Thread meshWorkerThread;
 
 	public struct ChunkGenInfoHelper
 	{
@@ -25,45 +36,88 @@ public partial class Chunks : Node3D
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		if (Chunk.AtlasTexture == null)
+		// make sure the texture atlas is created before starting worker threads
+		if (BlockAtlasTexture.AtlasTexture == null)
 		{
-			Chunk.AtlasTexture = Chunk.CreateTextureAtlas(Chunk.blockTextures, out Chunk.uvMappings);
+			BlockAtlasTexture.AtlasTexture = BlockAtlasTexture.CreateTextureAtlas(BlockAtlasTexture.BlockTextures, out BlockAtlasTexture.UvMappings);
 		}
-		for (int x = 0; x < ChunksAroundMe.X; x++)
+
+		// start worker threads
+		terrainWorkerThread = new Thread(TerrainWorker.Worker);
+		terrainWorkerThread.Start();
+
+		MeshWorker.ChunkScene = chunkScene;
+		meshWorkerThread = new Thread(MeshWorker.Worker);
+		meshWorkerThread.Start();
+	}
+
+	public override void _ExitTree()
+	{
+		// Stop worker threads
+		TerrainWorker.StopWorker();
+		terrainWorkerThread.Join();
+
+		MeshWorker.StopWorker();
+		meshWorkerThread.Join();
+	}
+
+	private int tickCounter = -1;
+	public override void _PhysicsProcess(double delta)
+	{
+		if (tickCounter >= 15 || tickCounter == -1)
 		{
-			for (int y = 0; y < ChunksAroundMe.Y; y++)
+			tickCounter = 0;
+			Vector3I location = (Vector3I)(Camera.GlobalPosition / ChunkData.Size);
+			var neededChunks = GetNeededChunks(location, Dimensions, ChunksData);
+			if (neededChunks.Count > 0)
 			{
-				for (int z = 0; z < ChunksAroundMe.Z; z++)
-				{
-					AddChunk(new Vector3I(x - (ChunksAroundMe.X / 2), y - (ChunksAroundMe.Y / 2), z - (ChunksAroundMe.Z / 2)));
-				}
+				GD.Print("Add Chunks");
+				var sortedChunks = SortChunks(neededChunks);
+				TerrainWorker.UpdateList(sortedChunks);
+			}
+			RemoveChunksOutOfRange();
+		}
+		tickCounter++;
+	}
+
+	public override void _Process(double delta)
+	{
+		AddChunksFromQueue();
+	}
+
+	public void AddChunksFromQueue()
+	{
+		if (ChunksReadyToShow.Count == 0) { return; }
+		int currentCount = ChunksReadyToShow.Count;
+		for (int i = 0; i < currentCount; i++)
+		{
+			Vector3I index = ChunksReadyToShow.Dequeue();
+			//GD.Print($"Adding child: {c}");
+			Chunk c = SafeGetChunksMesh(index);
+			if (c != null)
+			{
+				AddChild(c);
 			}
 		}
 	}
 
-	public void AddChunk(Vector3I pos)
+	// The center chunk is where the character is at so we need to get all the chunks around it
+	public List<ChunkGenInfoHelper> GetNeededChunks(Vector3I centerChunk, Vector3I dimensions, Dictionary<Vector3I, ChunkData> currentChunks)
 	{
-		Chunk chunkInstance = (Chunk)chunkScene.Instantiate();
-		chunkInstance.ChunkLocation = pos;
-		chunkInstance.Transform = new Transform3D(Basis.Identity, new Vector3(pos.X * 16, pos.Y * 16, pos.Z * 16));
-		chunkInstance.Load();
-		AddChild(chunkInstance);
-		chunks[pos] = chunkInstance;
-	}
-
-	public System.Collections.Generic.List<ChunkGenInfoHelper> GetNeededChunks(Vector3I characterLocation, Vector3I dimensions, Dictionary<Vector3I, Chunk> currentChunks)
-	{
-		System.Collections.Generic.List<ChunkGenInfoHelper> neededChunks = new();
-		for(int x = 0; x < dimensions.X; x++)
+		List<ChunkGenInfoHelper> neededChunks = new();
+		int xx = centerChunk.X - (dimensions.X / 2); // 1-(3/2) = 0
+		int yy = centerChunk.Y - (dimensions.Y / 2);
+		int zz = centerChunk.Z - (dimensions.Z / 2);
+		for (int x = 0; x < dimensions.X; x++)
 		{
-			for(int y = 0; y < dimensions.Y; y++)
+			for (int y = 0; y < dimensions.Y; y++)
 			{
-				for(int z = 0; z < dimensions.Z; z++)
+				for (int z = 0; z < dimensions.Z; z++)
 				{
-					Vector3I correctedPosition = new Vector3I(x + characterLocation.X, y + characterLocation.Y, z + characterLocation.Z);
+					Vector3I correctedPosition = new Vector3I(x + xx, y + yy, z + zz);
 					if (!currentChunks.ContainsKey(correctedPosition))
 					{
-						neededChunks.Add(new ChunkGenInfoHelper(correctedPosition, characterLocation.DistanceTo(characterLocation)));
+						neededChunks.Add(new ChunkGenInfoHelper(correctedPosition, centerChunk.DistanceTo(correctedPosition)));
 					}
 				}
 			}
@@ -71,19 +125,113 @@ public partial class Chunks : Node3D
 		return neededChunks;
 	}
 
-	public Array<Vector3I> SortChunks(System.Collections.Generic.List<ChunkGenInfoHelper> chunks, Vector3I characterLocation)
+	public List<Vector3I> SortChunks(List<ChunkGenInfoHelper> chunks)
 	{
-		Dictionary<float, Array<Vector3I>> map = new Dictionary<float, Array<Vector3I>>();
-		Array<float> keys = new Array<float>();
-		foreach(var chunk in chunks)
+		// use a map and a list of keys to store lists of chunks to generate
+		Dictionary<float, List<Vector3I>> map = new Dictionary<float, List<Vector3I>>();
+		List<float> keys = new List<float>();
+
+		foreach (var chunk in chunks)
 		{
-			keys.Add(chunk.DistanceFromPlayer);
-			if(!map.ContainsKey(chunk.DistanceFromPlayer))
+			if (!map.ContainsKey(chunk.DistanceFromPlayer))
 			{
-				map.Add(chunk.DistanceFromPlayer, new Array<Vector3I>());
+				map.Add(chunk.DistanceFromPlayer, new List<Vector3I>());
+
+				// only add the key once since we can have duplicates
+				keys.Add(chunk.DistanceFromPlayer);
 			}
 			map[chunk.DistanceFromPlayer].Add(chunk.Location);
 		}
-		return new Array<Vector3I>();
+
+		// sort the keys so we can access them from shortest to longest
+		keys.Sort();
+
+		// loop through keys shortest to longest and add them to the list
+		// this makes the first element the highest priority
+		List<Vector3I> sortedChunksByDistance = new List<Vector3I>();
+		float largest = 0;
+		foreach (var key in keys)
+		{
+			if (Mathf.Abs(key) > largest)
+			{
+				largest = key;
+			}
+			foreach (var chunk in map[key])
+			{
+				sortedChunksByDistance.Add(chunk);
+			}
+		}
+		GD.Print($"largest distance is {largest}");
+		return sortedChunksByDistance;
+	}
+
+	public void RemoveChunksOutOfRange()
+	{
+		float cullDistance = ((Dimensions.X + 2) * Mathf.Sqrt2) / 2;
+		Vector3 cameraPosition = ((Vector3I)Camera.GlobalPosition) / ChunkData.Size;
+		// loop over chunks data
+		var keys = SafeChunksMeshGetKeys();
+		foreach (Vector3I key in keys)
+		{
+			float distanceAway = cameraPosition.DistanceTo(key);
+			if (Mathf.Abs(distanceAway) >= cullDistance)
+			{
+				GD.Print($"cull distance: {cullDistance} distanceAway: {distanceAway}");
+				SafeGetChunksMesh(key)?.QueueFree();
+				SafeRemoveChunksMesh(key);
+				ChunksData.Remove(key);
+				heightMaps.Remove(key);
+				//GD.Print($"Removed chunk at {kvp.Key}");
+				// TODO maybe? will we ever try to remove a chunk that hasn't been drawn yet?
+				//if (ChunksReadyToShow.Contains(kvp.Key))
+				//{
+				//	ChunksReadyToShow.
+				//}
+			}
+		}
+	}
+
+	public static void SafeAddToChunksMesh(Vector3I key, Chunk value)
+	{
+		lock (ChunksMeshLock)
+		{
+			ChunksMesh.Add(key, value);
+		}
+	}
+
+	public static Chunk SafeGetChunksMesh(Vector3I key)
+	{
+		lock (ChunksMeshLock)
+		{
+			return ChunksMesh[key];
+		}
+	}
+
+	public static void SafeRemoveChunksMesh(Vector3I key)
+	{
+		lock (ChunksMeshLock)
+		{
+			ChunksMesh.Remove(key);
+		}
+	}
+
+	public static bool SafeChunksMeshContainsKey(Vector3I key)
+	{
+		lock(ChunksMeshLock)
+		{
+			return ChunksMesh.ContainsKey(key);
+		}
+	}
+
+	public static List<Vector3I> SafeChunksMeshGetKeys()
+	{
+		lock(ChunksMeshLock)
+		{
+			List<Vector3I> o = new List<Vector3I>();
+			foreach(KeyValuePair<Vector3I, Chunk> keyValuePair in ChunksMesh) {
+				o.Add(keyValuePair.Key);
+			}
+			return o;
+		}
 	}
 }
