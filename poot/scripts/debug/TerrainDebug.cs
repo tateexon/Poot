@@ -16,7 +16,6 @@ public partial class TerrainDebug : Label
 
 	private void UpdateLabel(int count)
 	{
-		//Text = $"Terrain Queue: {count}";
 		CallDeferred(nameof(SetLabelText), count);
 	}
 

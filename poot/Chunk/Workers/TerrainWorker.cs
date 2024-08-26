@@ -30,8 +30,8 @@ public class TerrainWorker
 			{
 				Vector3I? item = null;
 
-				//Stopwatch sw = new Stopwatch();
-				//sw.Start();
+				Stopwatch sw = new Stopwatch();
+				sw.Start();
 				// Get the next item to process
 				lock (lockObject)
 				{
@@ -48,11 +48,12 @@ public class TerrainWorker
 					break; // Queue was empty, go back to waiting for new items
 				}
 				ProcessItem(item.Value);
-			//	sw.Stop();
-			//	TimeSpan ts = sw.Elapsed;
-			//	string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-			//ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
-			//	GD.Print("RunTime " + elapsedTime);
+				sw.Stop();
+				TimeSpan ts = sw.Elapsed;
+				string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+			ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+				EventManager.TerrainWorker_TimeEvent?.Invoke(elapsedTime);
+				//	GD.Print("RunTime " + elapsedTime);
 			}
 		}
 	}
@@ -92,16 +93,16 @@ public class TerrainWorker
 
 	static void ProcessItem(Vector3I item)
 	{
-		if (Chunks.ChunksData.ContainsKey(item)) { return; }
+		if (Chunks.ChunksData.SafeContainsKey(item)) { return; }
 		ChunkData data = new ChunkData(item);
-		if (!Chunks.heightMaps.ContainsKey(item))
+		if (!Chunks.heightMaps.SafeContainsKey(item))
 		{
-			Chunks.heightMaps.Add(item, data.GenerateHeightMap());
+			Chunks.heightMaps.SafeAdd(item, data.GenerateHeightMap());
 		}
-		int[,] heightMap = Chunks.heightMaps[item];
+		int[,] heightMap = Chunks.heightMaps.SafeGet(item);
 		data.GenerateTerrain(ref heightMap);
-		if (Chunks.ChunksData.ContainsKey(item)) { return; }
-		Chunks.ChunksData.Add(item, data);
-		MeshWorker.EnqueueItem(Chunks.ChunksData[item]);
+		if (Chunks.ChunksData.SafeContainsKey(item)) { return; }
+		Chunks.ChunksData.SafeAdd(item, data);
+		MeshWorker.EnqueueItem(Chunks.ChunksData.SafeGet(item));
 	}
 }

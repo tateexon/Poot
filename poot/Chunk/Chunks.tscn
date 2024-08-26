@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3 uid="uid://03elk3xge8pj"]
+[gd_scene load_steps=11 format=3 uid="uid://03elk3xge8pj"]
 
 [ext_resource type="Script" path="res://Chunk/Chunks.cs" id="1_se3pe"]
 [ext_resource type="Script" path="res://FlyCamera.cs" id="2_k7kt6"]
 [ext_resource type="PackedScene" uid="uid://1tpy4wtseeo6" path="res://Chunk/Chunk.tscn" id="3_awrud"]
 [ext_resource type="Script" path="res://scripts/debug/FPSLabel.cs" id="4_rtd6f"]
 [ext_resource type="Script" path="res://scripts/debug/TerrainDebug.cs" id="5_3uldg"]
+[ext_resource type="Script" path="res://scripts/debug/TerrainTimeDebug.cs" id="6_axn1l"]
 [ext_resource type="Script" path="res://scripts/debug/MeshDebug.cs" id="6_cm3if"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_of430"]
@@ -33,7 +34,7 @@ transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -
 shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, 15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2500, 13.282, 82)
 script = ExtResource("2_k7kt6")
 
 [node name="DebugCanvasLayer" type="CanvasLayer" parent="."]
@@ -48,11 +49,17 @@ theme_override_font_sizes/font_size = 32
 text = "FPS"
 script = ExtResource("4_rtd6f")
 
-[node name="Terrain" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+[node name="TerrainCount" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Terrain"
 script = ExtResource("5_3uldg")
+
+[node name="Label" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Terrain Time"
+script = ExtResource("6_axn1l")
 
 [node name="Mesh" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
 layout_mode = 2

@@ -92,7 +92,7 @@ public class MeshWorker
 
 	static void ProcessItem(ChunkData item)
 	{
-		if (Chunks.SafeChunksMeshContainsKey(item.Location)) { return; }
+		if (Chunks.ChunksMesh.SafeContainsKey(item.Location)) { return; }
 
 		Chunk chunkInstance = (Chunk)ChunkScene.Instantiate();
 		chunkInstance.ChunkLocation = item.Location;
@@ -100,8 +100,8 @@ public class MeshWorker
 		chunkInstance.IsGenerated = true;
 		chunkInstance.GenerateChunkMesh(item);
 
-		if (Chunks.SafeChunksMeshContainsKey(item.Location)) { return; }
-		Chunks.SafeAddToChunksMesh(item.Location, chunkInstance);
+		if (Chunks.ChunksMesh.SafeContainsKey(item.Location)) { return; }
+		Chunks.ChunksMesh.SafeAdd(item.Location, chunkInstance);
 
 		// notify the mesh is ready to be added to the tree
 		Chunks.ChunksReadyToShow.Enqueue(item.Location);

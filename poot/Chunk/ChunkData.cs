@@ -23,7 +23,16 @@ public struct ChunkData
 		FastNoiseLite terrainNoiseF = new FastNoiseLite();
 		terrainNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
 		terrainNoiseF.FractalOctaves = 4;
-		terrainNoiseF.Frequency = 0.01f;
+		terrainNoiseF.Frequency = 0.02f;
+
+		//terrainNoiseF.DomainWarpAmplitude = 1;
+		//terrainNoiseF.DomainWarpEnabled = true;
+		//terrainNoiseF.DomainWarpFractalGain = 1;
+		//terrainNoiseF.DomainWarpFractalLacunarity = 1;
+		//terrainNoiseF.DomainWarpFractalOctaves = 1;
+		//terrainNoiseF.DomainWarpFractalType = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive;
+		//terrainNoiseF.DomainWarpFrequency = 1;
+		//terrainNoiseF.DomainWarpType = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced;
 		
 		int[,] heightMap = new int[Size, Size];
 
@@ -51,7 +60,7 @@ public struct ChunkData
 		caveNoiseF.Seed = (int)Seed;
 		caveNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
 		caveNoiseF.FractalOctaves = 3;
-		caveNoiseF.Frequency = 0.01f;
+		caveNoiseF.Frequency = 0.02f;
 		//caveNoise.Octaves = 3;
 		//caveNoise.Period = 25;
 		//caveNoise.Persistence = 0.7f;

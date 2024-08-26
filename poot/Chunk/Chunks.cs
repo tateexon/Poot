@@ -1,15 +1,12 @@
 using Godot;
-using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
 public partial class Chunks : Node3D
 {
-	private static Dictionary<Vector3I, Chunk> ChunksMesh = new Dictionary<Vector3I, Chunk>();
-	public static object ChunksMeshLock = new object();
-	public static Dictionary<Vector3I, ChunkData> ChunksData = new Dictionary<Vector3I, ChunkData>();
-	public static Dictionary<Vector3I, int[,]> heightMaps = new Dictionary<Vector3I, int[,]>();
+	public static ThreadSafeDictionary<Vector3I, Chunk> ChunksMesh = new ThreadSafeDictionary<Vector3I, Chunk>();
+	public static ThreadSafeDictionary<Vector3I, ChunkData> ChunksData = new ThreadSafeDictionary<Vector3I, ChunkData>();
+	public static ThreadSafeDictionary<Vector3I, int[,]> heightMaps = new ThreadSafeDictionary<Vector3I, int[,]>();
 	public static Queue<Vector3I> ChunksReadyToShow = new Queue<Vector3I>();
 
 	[Export] public PackedScene chunkScene;
@@ -71,7 +68,7 @@ public partial class Chunks : Node3D
 			var neededChunks = GetNeededChunks(location, Dimensions, ChunksData);
 			if (neededChunks.Count > 0)
 			{
-				GD.Print("Add Chunks");
+				//GD.Print("Add Chunks");
 				var sortedChunks = SortChunks(neededChunks);
 				TerrainWorker.UpdateList(sortedChunks);
 			}
@@ -88,21 +85,26 @@ public partial class Chunks : Node3D
 	public void AddChunksFromQueue()
 	{
 		if (ChunksReadyToShow.Count == 0) { return; }
+		int maxInOneFrame = 200;
 		int currentCount = ChunksReadyToShow.Count;
 		for (int i = 0; i < currentCount; i++)
 		{
 			Vector3I index = ChunksReadyToShow.Dequeue();
 			//GD.Print($"Adding child: {c}");
-			Chunk c = SafeGetChunksMesh(index);
+			Chunk c = ChunksMesh.SafeGet(index);
 			if (c != null)
 			{
 				AddChild(c);
+			}
+			if (i >= maxInOneFrame)
+			{
+				break;
 			}
 		}
 	}
 
 	// The center chunk is where the character is at so we need to get all the chunks around it
-	public List<ChunkGenInfoHelper> GetNeededChunks(Vector3I centerChunk, Vector3I dimensions, Dictionary<Vector3I, ChunkData> currentChunks)
+	public List<ChunkGenInfoHelper> GetNeededChunks(Vector3I centerChunk, Vector3I dimensions, ThreadSafeDictionary<Vector3I, ChunkData> currentChunks)
 	{
 		List<ChunkGenInfoHelper> neededChunks = new();
 		int xx = centerChunk.X - (dimensions.X / 2); // 1-(3/2) = 0
@@ -115,7 +117,7 @@ public partial class Chunks : Node3D
 				for (int z = 0; z < dimensions.Z; z++)
 				{
 					Vector3I correctedPosition = new Vector3I(x + xx, y + yy, z + zz);
-					if (!currentChunks.ContainsKey(correctedPosition))
+					if (!currentChunks.SafeContainsKey(correctedPosition))
 					{
 						neededChunks.Add(new ChunkGenInfoHelper(correctedPosition, centerChunk.DistanceTo(correctedPosition)));
 					}
@@ -161,7 +163,7 @@ public partial class Chunks : Node3D
 				sortedChunksByDistance.Add(chunk);
 			}
 		}
-		GD.Print($"largest distance is {largest}");
+		//GD.Print($"largest distance is {largest}");
 		return sortedChunksByDistance;
 	}
 
@@ -170,68 +172,31 @@ public partial class Chunks : Node3D
 		float cullDistance = ((Dimensions.X + 2) * Mathf.Sqrt2) / 2;
 		Vector3 cameraPosition = ((Vector3I)Camera.GlobalPosition) / ChunkData.Size;
 		// loop over chunks data
-		var keys = SafeChunksMeshGetKeys();
+		var keys = ChunksMesh.SafeGetKeys();
+		int maxOnOneFrame = 200;
+		int count = 0;
 		foreach (Vector3I key in keys)
 		{
 			float distanceAway = cameraPosition.DistanceTo(key);
 			if (Mathf.Abs(distanceAway) >= cullDistance)
 			{
-				GD.Print($"cull distance: {cullDistance} distanceAway: {distanceAway}");
-				SafeGetChunksMesh(key)?.QueueFree();
-				SafeRemoveChunksMesh(key);
-				ChunksData.Remove(key);
-				heightMaps.Remove(key);
+				//GD.Print($"cull distance: {cullDistance} distanceAway: {distanceAway}");
+				ChunksMesh.SafeGet(key)?.QueueFree();
+				ChunksMesh.SafeRemove(key);
+				ChunksData.SafeRemove(key);
+				heightMaps.SafeRemove(key);
 				//GD.Print($"Removed chunk at {kvp.Key}");
 				// TODO maybe? will we ever try to remove a chunk that hasn't been drawn yet?
 				//if (ChunksReadyToShow.Contains(kvp.Key))
 				//{
 				//	ChunksReadyToShow.
 				//}
+				count++;
+				if (count == maxOnOneFrame)
+				{
+					break;
+				}
 			}
-		}
-	}
-
-	public static void SafeAddToChunksMesh(Vector3I key, Chunk value)
-	{
-		lock (ChunksMeshLock)
-		{
-			ChunksMesh.Add(key, value);
-		}
-	}
-
-	public static Chunk SafeGetChunksMesh(Vector3I key)
-	{
-		lock (ChunksMeshLock)
-		{
-			return ChunksMesh[key];
-		}
-	}
-
-	public static void SafeRemoveChunksMesh(Vector3I key)
-	{
-		lock (ChunksMeshLock)
-		{
-			ChunksMesh.Remove(key);
-		}
-	}
-
-	public static bool SafeChunksMeshContainsKey(Vector3I key)
-	{
-		lock(ChunksMeshLock)
-		{
-			return ChunksMesh.ContainsKey(key);
-		}
-	}
-
-	public static List<Vector3I> SafeChunksMeshGetKeys()
-	{
-		lock(ChunksMeshLock)
-		{
-			List<Vector3I> o = new List<Vector3I>();
-			foreach(KeyValuePair<Vector3I, Chunk> keyValuePair in ChunksMesh) {
-				o.Add(keyValuePair.Key);
-			}
-			return o;
 		}
 	}
 }
