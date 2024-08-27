@@ -50,18 +50,21 @@ text = "FPS"
 script = ExtResource("4_rtd6f")
 
 [node name="TerrainCount" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Terrain"
 script = ExtResource("5_3uldg")
 
 [node name="Label" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Terrain Time"
 script = ExtResource("6_axn1l")
 
 [node name="Mesh" type="Label" parent="DebugCanvasLayer/VBoxContainer"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Mesh"

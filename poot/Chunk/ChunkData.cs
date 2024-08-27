@@ -10,6 +10,7 @@ public struct ChunkData
 	public BlockType[,,] Blocks;
 	public Vector3I Location;
 	public bool IsGenerated = false;
+	public bool IsDirty = false;
 
 	public ChunkData(Vector3I location)
 	{
@@ -33,7 +34,7 @@ public struct ChunkData
 		//terrainNoiseF.DomainWarpFractalType = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive;
 		//terrainNoiseF.DomainWarpFrequency = 1;
 		//terrainNoiseF.DomainWarpType = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced;
-		
+
 		int[,] heightMap = new int[Size, Size];
 
 		for (int x = 0; x < Size; x++)
@@ -104,6 +105,8 @@ public struct ChunkData
 				}
 			}
 		}
+		IsGenerated = true;
+		IsDirty = true;
 	}
 
 }

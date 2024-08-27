@@ -30,7 +30,11 @@ public class ThreadSafeDictionary<TKey, TValue>
 	{
 		lock (_Lock)
 		{
-			return _Dictionary[key];
+			if (_Dictionary.ContainsKey(key))
+			{
+				return _Dictionary[key];
+			}
+			return default(TValue);
 		}
 	}
 
@@ -82,6 +86,13 @@ public class ThreadSafeDictionary<TKey, TValue>
 			{
 				return _Dictionary.Count;
 			}
+		}
+	}
+
+	public Dictionary<TKey, TValue> SafeShallowClone()
+	{
+		lock (_Lock) {
+			return new Dictionary<TKey, TValue>(_Dictionary);
 		}
 	}
 }

@@ -43,6 +43,7 @@ public partial class FlyCamera : Camera3D
 	private void HandleInput(double delta)
 	{
 		_velocity = Vector3.Zero;
+		float speed = MoveSpeed;
 
 		Vector3 forwardDirection = Transform.Basis.Z;
 		forwardDirection.Y = 0;  // Ignore the vertical component
@@ -60,8 +61,10 @@ public partial class FlyCamera : Camera3D
 			_velocity += Vector3.Up;
 		if (Input.IsActionPressed("move_down"))
 			_velocity -= Vector3.Up;
+		if (Input.IsActionPressed("speed_up"))
+			speed *= 2;
 
-		_velocity = _velocity.Normalized() * MoveSpeed * (float)delta;
+		_velocity = _velocity.Normalized() * speed * (float)delta;
 	}
 
 	private void UpdateRotation(double delta)

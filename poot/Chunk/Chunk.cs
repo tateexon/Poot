@@ -52,6 +52,7 @@ public partial class Chunk : MeshInstance3D
 
 		Mesh = mesh;
 		Mesh.SurfaceSetMaterial(0, material);
+		data.IsDirty = false;
 
 		//// Add collision
 		//ConcavePolygonShape3D collisionShape = new ConcavePolygonShape3D();
