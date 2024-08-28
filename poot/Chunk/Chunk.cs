@@ -11,7 +11,7 @@ public partial class Chunk : MeshInstance3D
 	private const int TotalIndices = ChunkData.BlockCount * 6 * 6;   // 6 faces, 6 indices per face
 	private const int TotalUvs = TotalVertices;
 
-	public void GenerateChunkMesh(ChunkData data)
+	public bool GenerateChunkMesh(ChunkData data, ThreadSafeDictionary<Vector3I, ChunkData> worldChunks)
 	{
 		Vector3[] vertices = new Vector3[TotalVertices];
 		int[] indices = new int[TotalIndices];
@@ -27,7 +27,13 @@ public partial class Chunk : MeshInstance3D
 				{
 					if (data.Blocks[x, y, z] != BlockType.Air)
 					{
-						bool[] checks = CheckNeighboringBlocks(x, y, z, data);
+						// Check neighboring blocks and determine if all required chunks are present
+						bool[] checks;
+						if (!TryCheckNeighboringBlocks(x, y, z, data, worldChunks, out checks))
+						{
+							// If a required chunk is missing, return false to indicate failure
+							return false;
+						}
 						AddBlockMesh(new Vector3(x, y, z), data.Blocks[x, y, z], vertices, indices, uvs, ref vertexIndex, ref indexIndex,
 							checks);
 					}
@@ -74,19 +80,95 @@ public partial class Chunk : MeshInstance3D
 		//occluder.SetArrays(vertices, indices);
 		//occluderInstance.SetOccluder(occluder);
 		//AddChild(occluderInstance);
+
+		return true;
+	}
+
+	private Vector3I[] _directions = new Vector3I[]
+	{
+		new Vector3I(0, 0, -1), // Front
+		new Vector3I(0, 0, 1),  // Back
+		new Vector3I(-1, 0, 0), // Left
+		new Vector3I(1, 0, 0),  // Right
+		new Vector3I(0, 1, 0),  // Top
+		new Vector3I(0, -1, 0)  // Bottom
+	};
+
+	// Check neighboring blocks and verify that all required chunks are available
+	private bool TryCheckNeighboringBlocks(int x, int y, int z, ChunkData data, ThreadSafeDictionary<Vector3I, ChunkData> worldChunks, out bool[] drawFaces)
+	{
+		drawFaces = new bool[6];
+
+		for (int i = 0; i < _directions.Length; i++)
+		{
+			Vector3I neighborPosition = new Vector3I(x, y, z) + _directions[i];
+
+			if (IsInsideChunk(neighborPosition))
+			{
+				drawFaces[i] = (data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z] == BlockType.Air);
+			}
+			else
+			{
+				Vector3I neighborChunkPosition = data.Location + GetChunkOffset(neighborPosition);
+				if (worldChunks.TryGetValue(neighborChunkPosition, out ChunkData neighborChunk))
+				{
+					Vector3I localNeighborPosition = GetLocalPosition(neighborPosition);
+					drawFaces[i] = (neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z] == BlockType.Air);
+				}
+				else
+				{
+					// Required chunk is missing, return false to indicate failure
+					//GD.Print($"Missing terrain chunk {neighborChunkPosition}");
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 	// Check neighboring blocks to determine which faces to draw
-	private bool[] CheckNeighboringBlocks(int x, int y, int z, ChunkData data)
-	{
-		bool drawFront = (z == 0 || data.Blocks[x, y, z - 1] == BlockType.Air);
-		bool drawBack = (z == ChunkData.Size - 1 || data.Blocks[x, y, z + 1] == BlockType.Air);
-		bool drawLeft = (x == 0 || data.Blocks[x - 1, y, z] == BlockType.Air);
-		bool drawRight = (x == ChunkData.Size - 1 || data.Blocks[x + 1, y, z] == BlockType.Air);
-		bool drawTop = (y == ChunkData.Size - 1 || data.Blocks[x, y + 1, z] == BlockType.Air);
-		bool drawBottom = (y == 0 || data.Blocks[x, y - 1, z] == BlockType.Air);
+	//private bool[] CheckNeighboringBlocks(int x, int y, int z, ChunkData data, ThreadSafeDictionary<Vector3I, ChunkData> worldChunks)
+	//{
+	//	bool drawFront = (z == 0 || data.Blocks[x, y, z - 1] == BlockType.Air);
+	//	bool drawBack = (z == ChunkData.Size - 1 || data.Blocks[x, y, z + 1] == BlockType.Air);
+	//	bool drawLeft = (x == 0 || data.Blocks[x - 1, y, z] == BlockType.Air);
+	//	bool drawRight = (x == ChunkData.Size - 1 || data.Blocks[x + 1, y, z] == BlockType.Air);
+	//	bool drawTop = (y == ChunkData.Size - 1 || data.Blocks[x, y + 1, z] == BlockType.Air);
+	//	bool drawBottom = (y == 0 || data.Blocks[x, y - 1, z] == BlockType.Air);
 
-		return new bool[6] { drawFront, drawBack, drawLeft, drawRight, drawTop, drawBottom };
+	//	return new bool[6] { drawFront, drawBack, drawLeft, drawRight, drawTop, drawBottom };
+	//}
+
+	private bool IsInsideChunk(Vector3I position)
+	{
+		return position.X >= 0 && position.X < ChunkData.Size &&
+			   position.Y >= 0 && position.Y < ChunkData.Size &&
+			   position.Z >= 0 && position.Z < ChunkData.Size;
+	}
+
+	private Vector3I GetChunkOffset(Vector3I position)
+	{
+		return new Vector3I(
+			position.X < 0 ? -1 : (position.X >= ChunkData.Size ? 1 : 0),
+			position.Y < 0 ? -1 : (position.Y >= ChunkData.Size ? 1 : 0),
+			position.Z < 0 ? -1 : (position.Z >= ChunkData.Size ? 1 : 0)
+		);
+	}
+
+	private Vector3I GetLocalPosition(Vector3I position)
+	{
+		return new Vector3I(
+			Mod(position.X, ChunkData.Size),
+			Mod(position.Y, ChunkData.Size),
+			Mod(position.Z, ChunkData.Size)
+		);
+	}
+
+	private int Mod(int value, int modulus)
+	{
+		int result = value % modulus;
+		return result < 0 ? result + modulus : result;
 	}
 
 	private void AddBlockMesh(Vector3 position, BlockType blockType, Vector3[] vertices, int[] indices, Vector2[] uvs, ref int vertexIndex, ref int indexIndex, bool[] drawChecks)

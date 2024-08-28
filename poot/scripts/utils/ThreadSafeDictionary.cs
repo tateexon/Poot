@@ -38,6 +38,14 @@ public class ThreadSafeDictionary<TKey, TValue>
 		}
 	}
 
+	public bool TryGetValue(TKey key, out TValue value)
+	{
+		lock (_Lock)
+		{
+			return _Dictionary.TryGetValue(key, out value);
+		}
+	}
+
 	public bool SafeRemove(TKey key)
 	{
 		lock (_Lock)

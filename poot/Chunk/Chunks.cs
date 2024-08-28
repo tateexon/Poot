@@ -1,7 +1,5 @@
 using Godot;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
 
 public partial class Chunks : Node3D
 {
@@ -11,17 +9,25 @@ public partial class Chunks : Node3D
 	public static ThreadSafeList<Vector3I> ChunksReadyForMesh = new ThreadSafeList<Vector3I>();
 	public static ThreadSafeList<Vector3I> ChunksReadyToShow = new ThreadSafeList<Vector3I>();
 
-	private int _MaxChunksRenderedPerFrame = 1000;
-	private int _MaxChunksRemovedPerFrame = 1000;
+	private int _maxChunksRenderedPerFrame = 1000;
+	private int _maxChunksRemovedPerFrame = 1000;
+
+	private const int _WORKER_THREADS = 5;
+	private const float _CUBE_DIAGONAL = 1.732051f; //Mathf.Sqrt(3);
 
 	[Export] public PackedScene chunkScene;
 
-	public static Vector3I Dimensions = new Vector3I(15, 9, 15);
+	public static Vector3I Dimensions = new Vector3I(18, 9, 18);
+	//public static Vector3I Dimensions = new Vector3I(3, 3, 3);
+
+	private float _maxGenerateDistance;
+	private float _maxRenderDistance;
+	private float _maxRemoveDistance;
 
 	[Export] public Camera3D Camera;
 
-	private TerrainWorker terrainWorkerQueue;
-	public static MeshWorker meshWorkerQueue;
+	public static TerrainWorker _terrainWorkerQueue;
+	private MeshWorker _meshWorkerQueue;
 
 	public struct ChunkGenInfoHelper
 	{
@@ -44,23 +50,36 @@ public partial class Chunks : Node3D
 			BlockAtlasTexture.AtlasTexture = BlockAtlasTexture.CreateTextureAtlas(BlockAtlasTexture.BlockTextures, out BlockAtlasTexture.UvMappings);
 		}
 
-		// start worker threads
-		terrainWorkerQueue = new TerrainWorker(10);
-		terrainWorkerQueue.StartWorkerThreads();
+		_maxGenerateDistance = CalculateMaxDistance(Dimensions);
+		_maxRenderDistance = CalculateMaxDistance(Dimensions);
+		_maxRemoveDistance = CalculateMaxDistance(Dimensions);
+		_maxRemoveDistance = Mathf.Ceil(_maxRemoveDistance / 2f) + _CUBE_DIAGONAL;
 
-		meshWorkerQueue = new MeshWorker(10);
-		meshWorkerQueue.ChunkScene = chunkScene;
-		meshWorkerQueue.StartWorkerThreads();
+		GD.Print($"render {_maxRenderDistance}");
+		GD.Print($"generate {_maxGenerateDistance}");
+		GD.Print($"remove {_maxRemoveDistance}");
+
+
+		// start worker threads
+		_terrainWorkerQueue = new TerrainWorker(_WORKER_THREADS);
+		_terrainWorkerQueue.StartWorkerThreads();
+
+		_meshWorkerQueue = new MeshWorker(_WORKER_THREADS);
+		_meshWorkerQueue.ChunkScene = chunkScene;
+		_meshWorkerQueue.StartWorkerThreads();
+
+		LoadNewChunksToGenerate(Camera.GlobalPosition, Dimensions);
+		_firstGetNeededChunks = false;
 	}
 
 	public override void _ExitTree()
 	{
 		// Stop worker threads
-		terrainWorkerQueue.Stop();
-		meshWorkerQueue.Stop();
+		_terrainWorkerQueue.Stop();
+		_meshWorkerQueue.Stop();
 	}
 
-	private int tickCounter = -1;
+	private int tickCounter = 0;
 	private int tickEnd = 15;
 	public override void _PhysicsProcess(double delta)
 	{
@@ -68,43 +87,39 @@ public partial class Chunks : Node3D
 		if (tickCounter >= tickEnd || tickCounter == -1)
 		{
 			tickCounter = 0;
-			LoadNewChunksToGenerate();
-			LoadChunksToRender();
+			LoadNewChunksToGenerate(Camera.GlobalPosition, Dimensions);
+			LoadChunksToRender(Camera.GlobalPosition, Dimensions);
 			AddChunksFromQueue();
-			RemoveChunksOutOfRange();
+			RemoveChunksOutOfRange(Camera.GlobalPosition, Dimensions);
 		}
 		tickCounter++;
 	}
 
-	public override void _Process(double delta)
+	private void LoadNewChunksToGenerate(Vector3 centerChunk, Vector3I dimensions)
 	{
-		AddChunksFromQueue();
-		RemoveChunksOutOfRange();
-	}
-
-	private void LoadNewChunksToGenerate()
-	{
-		var neededChunks = GetNeededChunks((Vector3I)Camera.GlobalPosition, Dimensions, ChunksData);
+		var neededChunks = GetNeededChunks(centerChunk, dimensions, ChunksData);
 		if (neededChunks.SafeCount() > 0)
 		{
-			var sortedChunks = SortChunks(neededChunks, Camera.GlobalPosition);
-			terrainWorkerQueue.UpdateList(sortedChunks);
+			var sortedChunks = SortChunks(neededChunks, centerChunk);
+			_terrainWorkerQueue.UpdateList(sortedChunks);
 		}
 	}
 
-	private void LoadChunksToRender()
+	private void LoadChunksToRender(Vector3 centerChunk, Vector3I dimensions)
 	{
-		var data = ChunksReadyForMesh.SafeShallowClone();
+		Vector3I correctedCenterChunk = ((Vector3I)centerChunk) / ChunkData.Size;
 		var neededChunks = new ThreadSafeList<Vector3I>();
-		foreach (var chunk in data)
+		var sortedData = SortChunks(ChunksReadyForMesh, centerChunk);
+		foreach (var chunk in sortedData)
 		{
+			if (correctedCenterChunk.DistanceTo(chunk) >= _maxRenderDistance) { continue; }
 			ChunkData d = ChunksData.SafeGet(chunk);
 			if (d.Blocks == null) { continue; }
 			if (d.IsGenerated && !d.IsDirty)
 			{
 				ChunksReadyForMesh.SafeRemove(chunk);
 			}
-			else if (d.IsGenerated && d.IsDirty)
+			else if (d.IsGenerated && d.IsDirty && !neededChunks.SafeContains(chunk))
 			{
 				neededChunks.SafeAdd(chunk);
 			}
@@ -112,7 +127,7 @@ public partial class Chunks : Node3D
 		if (neededChunks.SafeCount() > 0)
 		{
 			var sortedChunks = SortChunks(neededChunks, Camera.GlobalPosition);
-			meshWorkerQueue.UpdateList(sortedChunks);
+			_meshWorkerQueue.UpdateList(sortedChunks);
 		}
 	}
 
@@ -132,25 +147,28 @@ public partial class Chunks : Node3D
 			{
 				AddChild(c);
 			}
-			if (i >= _MaxChunksRenderedPerFrame)
+			if (i >= _maxChunksRenderedPerFrame)
 			{
 				break;
 			}
 		}
 	}
 
-	private void RemoveChunksOutOfRange()
+	private int _plusChunks = 2;
+
+	private void RemoveChunksOutOfRange(Vector3 centerChunk, Vector3I dimensions)
 	{
-		float cullDistance = ((Dimensions.X + 2) * Mathf.Sqrt2) / 2;
-		Vector3 cameraPosition = ((Vector3I)Camera.GlobalPosition) / ChunkData.Size;
+		Vector3 cameraPosition = ((Vector3I)centerChunk) / ChunkData.Size;
+
 		// loop over chunks data
-		var keys = ChunksMesh.SafeGetKeys();
+		var keys = ChunksData.SafeGetKeys();
 		int count = 0;
 		foreach (Vector3I key in keys)
 		{
 			float distanceAway = cameraPosition.DistanceTo(key);
-			if (Mathf.Abs(distanceAway) >= cullDistance)
+			if (Mathf.Abs(distanceAway) > _maxRemoveDistance)
 			{
+				//GD.Print($"Removing chunk {key}");
 				ChunksMesh.SafeGet(key)?.QueueFree();
 				ChunksMesh.SafeRemove(key);
 				ChunksData.SafeRemove(key);
@@ -159,12 +177,12 @@ public partial class Chunks : Node3D
 				{
 					ChunksReadyToShow.SafeRemove(key);
 				}
-				if (!ChunksReadyForMesh.SafeContains(key))
+				if (ChunksReadyForMesh.SafeContains(key))
 				{
 					ChunksReadyForMesh.SafeRemove(key);
 				}
 				count++;
-				if (count == _MaxChunksRemovedPerFrame)
+				if (count == _maxChunksRemovedPerFrame)
 				{
 					break;
 				}
@@ -172,29 +190,70 @@ public partial class Chunks : Node3D
 		}
 	}
 
+	private Vector3I _lastPosition = Vector3I.Zero;
+	private bool _firstGetNeededChunks = true;
 	// The center chunk is where the character is at so we need to get all the chunks around it
-	private ThreadSafeList<Vector3I> GetNeededChunks(Vector3I centerChunk, Vector3I dimensions, ThreadSafeDictionary<Vector3I, ChunkData> currentChunks)
+	private ThreadSafeList<Vector3I> GetNeededChunks(Vector3 centerChunk, Vector3I dimensions, ThreadSafeDictionary<Vector3I, ChunkData> currentChunks)
 	{
-		Vector3I correctedCenterChunk = centerChunk / ChunkData.Size;
-		ThreadSafeList<Vector3I> neededChunks = new();
-		int xx = correctedCenterChunk.X - (dimensions.X / 2); // 1-(3/2) = 0
-		int yy = correctedCenterChunk.Y - (dimensions.Y / 2);
-		int zz = correctedCenterChunk.Z - (dimensions.Z / 2);
-		for (int x = 0; x < dimensions.X; x++)
+		// short circuit if this isn't the first iterations and we haven't moved
+		Vector3I c = GetCorrectedVector3IFromWorldSpace(centerChunk);
+		if (!_firstGetNeededChunks && _lastPosition == c)
 		{
-			for (int y = 0; y < dimensions.Y; y++)
+			return new ThreadSafeList<Vector3I>();
+		}
+		_lastPosition = c;
+
+
+		// find the needed chunks within the dimensions provided to loop over
+		ThreadSafeList<Vector3I> neededChunks = new();
+		int halfDimX = Mathf.FloorToInt(dimensions.X / 2f);
+		int halfDimY = Mathf.FloorToInt(dimensions.Y / 2f);
+		int halfDimZ = Mathf.FloorToInt(dimensions.Z / 2f);
+
+		//GD.Print($"gen {maxDistance}");
+
+		for (int x = -halfDimX; x <= halfDimX; x++)
+		{
+			for (int y = -halfDimY; y <= halfDimY; y++)
 			{
-				for (int z = 0; z < dimensions.Z; z++)
+				for (int z = -halfDimZ; z <= halfDimZ; z++)
 				{
-					Vector3I correctedPosition = new Vector3I(x + xx, y + yy, z + zz);
+					Vector3I correctedPosition = new Vector3I(c.X + x, c.Y + y, c.Z + z);
+					float distance = c.DistanceTo(correctedPosition);
+
+					if (distance >= _maxGenerateDistance)
+					{
+						continue;
+					}
 					if (!currentChunks.SafeContainsKey(correctedPosition))
 					{
+
 						neededChunks.SafeAdd(correctedPosition);
 					}
 				}
 			}
 		}
 		return neededChunks;
+	}
+
+	// Get the chunk space from the world space and account for negative numbers
+	private Vector3I GetCorrectedVector3IFromWorldSpace(Vector3 position)
+	{
+		int chunkX = Mathf.FloorToInt(position.X / ChunkData.Size);
+		int chunkY = Mathf.FloorToInt(position.Y / ChunkData.Size);
+		int chunkZ = Mathf.FloorToInt(position.Z / ChunkData.Size);
+		return new Vector3I(chunkX, chunkY, chunkZ);
+	}
+
+	// Helper function to calculate max distance for a given dimension
+	// get max distance for a circular/elliptical area in a 3D space sprt(x^2 + y^2 + z^2)
+	private float CalculateMaxDistance(Vector3 dimensions)
+	{
+		float halfX = dimensions.X / 2f;
+		float halfY = dimensions.Y / 2f;
+		float halfZ = dimensions.Z / 2f;
+
+		return Mathf.Sqrt(halfX * halfX + halfY * halfY + halfZ * halfZ);
 	}
 
 	private List<Vector3I> SortChunks(ThreadSafeList<Vector3I> chunks, Vector3 centralPoint)

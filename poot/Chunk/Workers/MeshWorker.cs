@@ -18,13 +18,22 @@ public class MeshWorker : WorkerQueue<Vector3I>
 		Chunk chunkInstance = (Chunk)ChunkScene.Instantiate();
 		chunkInstance.ChunkLocation = item.Location;
 		chunkInstance.Transform = new Transform3D(Basis.Identity, new Vector3(item.Location.X * ChunkData.Size, item.Location.Y * ChunkData.Size, item.Location.Z * ChunkData.Size));
-		chunkInstance.GenerateChunkMesh(item);
+		bool success = chunkInstance.GenerateChunkMesh(item, Chunks.ChunksData);
+		if (!success) {
+			Chunks._terrainWorkerQueue.EnqueueItem(chunk);
+			//if (Chunks.ChunksReadyForMesh.SafeContains(chunk))
+			//{
+			//	Chunks.ChunksReadyForMesh.SafeAdd(chunk);
+			//}
+			return;
+		}
 
 		if (Chunks.ChunksMesh.SafeContainsKey(item.Location)) { return; }
 		Chunks.ChunksMesh.SafeAdd(item.Location, chunkInstance);
 
 		// notify the mesh is ready to be added to the tree
 		Chunks.ChunksReadyToShow.SafeAdd(item.Location);
+		GD.Print("Generated Chunk Mesh");
 	}
 
 	public override void InvokeCounterEvent(int count)

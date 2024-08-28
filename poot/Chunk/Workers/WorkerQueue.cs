@@ -4,7 +4,7 @@ using System.Threading;
 
 public abstract class WorkerQueue<T>
 {
-	private List<T> _queue = new List<T>();
+	List<T> _queue = new List<T>();
 	private readonly object _lock = new object();
 	private bool _isPaused = false;
 	private bool _stop = false;
@@ -76,7 +76,7 @@ public abstract class WorkerQueue<T>
 		}
 	}
 
-	public void UpdateList(List<T> newQueue)
+	public virtual void UpdateList(List<T> newQueue)
 	{
 		lock (_lock)
 		{

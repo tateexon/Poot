@@ -20,7 +20,9 @@ public class TerrainWorker : WorkerQueue<Vector3I>
 		if (Chunks.ChunksReadyForMesh.SafeContains(item)) { return; }
 		if (data.Blocks == null) { return; }
 		Chunks.ChunksData.SafeAdd(item, data);
+		if (Chunks.ChunksReadyForMesh.SafeContains(item) ) { return; }
 		Chunks.ChunksReadyForMesh.SafeAdd(item);
+		//GD.Print($"Generated chunk {item}");
 	}
 
 	public override void InvokeCounterEvent(int count)
