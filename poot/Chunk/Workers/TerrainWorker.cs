@@ -12,7 +12,12 @@ public class TerrainWorker : WorkerQueue<Vector3I>
 		ChunkData data = new ChunkData(item);
 		if (!Chunks.heightMaps.SafeContainsKey(item))
 		{
-			Chunks.heightMaps.SafeAdd(item, data.GenerateHeightMap());
+			//var h = data.GenerateHeightMap();
+			//if (Chunks.heightMaps.SafeContainsKey(item)) { return; };
+			//Chunks.heightMaps.SafeAdd(item, data.HeightFromFloat(h));
+			var hh = data.FetchHeightMap();
+			if (Chunks.heightMaps.SafeContainsKey(item)) { return; };
+			Chunks.heightMaps.SafeAdd(item, data.HeightFromFloat(hh));
 		}
 		int[,] heightMap = Chunks.heightMaps.SafeGet(item);
 		data.GenerateTerrain(ref heightMap);

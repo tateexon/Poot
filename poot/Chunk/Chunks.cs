@@ -17,8 +17,8 @@ public partial class Chunks : Node3D
 
 	[Export] public PackedScene chunkScene;
 
-	public static Vector3I Dimensions = new Vector3I(18, 9, 18);
-	//public static Vector3I Dimensions = new Vector3I(3, 3, 3);
+	//public static Vector3I Dimensions = new Vector3I(18, 9, 18);
+	public static Vector3I Dimensions = new Vector3I(9, 6, 9);
 
 	private float _maxGenerateDistance;
 	private float _maxRenderDistance;

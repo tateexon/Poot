@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Net.Http;
 
 public struct ChunkData
 {
@@ -18,53 +19,52 @@ public struct ChunkData
 		Location = location;
 	}
 
-	public int[,] GenerateHeightMap()
+	//public float[,] GenerateHeightMap()
+	//{
+	//	FastNoiseLite terrainNoiseF = new FastNoiseLite();
+	//	terrainNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin;
+	//	terrainNoiseF.FractalOctaves = 3;
+	//	terrainNoiseF.Frequency = 0.01f;
+
+	//	float[,] heightMap = new float[Size, Size];
+
+	//	for (int x = 0; x < Size; x++)
+	//	{
+	//		for (int z = 0; z < Size; z++)
+	//		{
+	//			int cX = x + (Size * Location.X);
+	//			int cZ = z + (Size * Location.Z);
+
+	//			// Generate height map
+	//			float heightValue = terrainNoiseF.GetNoise2D(cX, cZ);
+	//			heightMap[x, z] = heightValue;
+	//		}
+	//	}
+	//	return heightMap;
+	//}
+
+	public int[,] HeightFromFloat(float[,] heightMap)
 	{
-		//OpenSimplexNoise terrainNoise = new OpenSimplexNoise(Seed);
-		FastNoiseLite terrainNoiseF = new FastNoiseLite();
-		terrainNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
-		terrainNoiseF.FractalOctaves = 4;
-		terrainNoiseF.Frequency = 0.02f;
-
-		//terrainNoiseF.DomainWarpAmplitude = 1;
-		//terrainNoiseF.DomainWarpEnabled = true;
-		//terrainNoiseF.DomainWarpFractalGain = 1;
-		//terrainNoiseF.DomainWarpFractalLacunarity = 1;
-		//terrainNoiseF.DomainWarpFractalOctaves = 1;
-		//terrainNoiseF.DomainWarpFractalType = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive;
-		//terrainNoiseF.DomainWarpFrequency = 1;
-		//terrainNoiseF.DomainWarpType = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced;
-
-		int[,] heightMap = new int[Size, Size];
-
+		int[,] newMap = new int[Size, Size];
 		for (int x = 0; x < Size; x++)
 		{
 			for (int z = 0; z < Size; z++)
 			{
-				int cX = x + (Size * Location.X);
-				int cZ = z + (Size * Location.Z);
-				// Generate height map
-				//float heightValue = (float)terrainNoise.Evaluate(cX, cZ);
-				float heightValue = terrainNoiseF.GetNoise2D(cX, cZ);
-				//float heightValue = OpenSimplexNoise2.Noise2(seed, cX, cZ);
-				int height = Mathf.RoundToInt(Mathf.Lerp(4, Size - 4, (heightValue + 1) / 2.0f));
-				heightMap[x, z] = height;
+				float heightValue = heightMap[x, z];
+				int height = Mathf.RoundToInt(Mathf.Lerp(64, Size - 64, (heightValue + 1) / 2.0f));
+				newMap[x, z] = height;
 			}
 		}
-		return heightMap;
+		return newMap;
 	}
 
 	public void GenerateTerrain(ref int[,] heightMap)
 	{
-		//OpenSimplexNoise caveNoise = new OpenSimplexNoise(Seed + 1);
 		FastNoiseLite caveNoiseF = new FastNoiseLite();
 		caveNoiseF.Seed = (int)Seed;
 		caveNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
 		caveNoiseF.FractalOctaves = 3;
 		caveNoiseF.Frequency = 0.02f;
-		//caveNoise.Octaves = 3;
-		//caveNoise.Period = 25;
-		//caveNoise.Persistence = 0.7f;
 
 		for (int x = 0; x < Size; x++)
 		{
@@ -95,9 +95,7 @@ public struct ChunkData
 					}
 
 					// Generate caves
-					//float caveValue = (float)caveNoise.Evaluate(cX, cY, cZ);
 					float caveValue = caveNoiseF.GetNoise3D(cX, cY, cZ);
-					//float caveValue = OpenSimplexNoise2.Noise3_Fallback(seed, cX, cY, cZ);
 					if (caveValue > 0.5f)
 					{
 						Blocks[x, y, z] = BlockType.Air;
@@ -109,4 +107,51 @@ public struct ChunkData
 		IsDirty = true;
 	}
 
+	private static readonly System.Net.Http.HttpClient httpClient = new System.Net.Http.HttpClient();
+	public float[,] FetchHeightMap()
+	{
+		float[,] heightMap = new float[Size, Size];
+		string url = $"http://127.0.0.1:8080/height_two/{Seed}/{Location.X}/{Location.Z}";
+		try
+		{
+			// Send the request and get the response synchronously
+			string responseText = httpClient.GetStringAsync(url).Result;
+
+			// Parse the response into a 2D float array
+			heightMap = ParseHeightMap(responseText);
+		}
+		catch (HttpRequestException e)
+		{
+			// Handle any errors during the HTTP request
+			Console.WriteLine($"Request error: {e.Message}");
+			return null;
+		}
+
+		return heightMap;
+	}
+
+
+	private float[,] ParseHeightMap(string data)
+	{
+		string[] lines = data.Split('\n');
+		float[,] heightMap = new float[Size, Size];
+
+		for (int y = 0; y < Size; y++)
+		{
+			string[] values = lines[y].Trim().Split(' ');
+			for (int x = 0; x < Size; x++)
+			{
+				if (float.TryParse(values[x], out float height))
+				{
+					heightMap[x, y] = height;
+				}
+				else
+				{
+					GD.PrintErr($"Failed to parse value at line {y + 1}, column {x + 1}: {values[x]}");
+				}
+			}
+		}
+
+		return heightMap;
+	}
 }
