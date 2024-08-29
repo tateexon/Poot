@@ -7,5 +7,7 @@ public enum BlockType
 	Grass,
 	Dirt,
 	Stone,
+	Water,
+	Sand,
 	// Add other block types as needed
 }

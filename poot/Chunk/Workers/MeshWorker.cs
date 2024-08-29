@@ -33,7 +33,7 @@ public class MeshWorker : WorkerQueue<Vector3I>
 
 		// notify the mesh is ready to be added to the tree
 		Chunks.ChunksReadyToShow.SafeAdd(item.Location);
-		GD.Print("Generated Chunk Mesh");
+		//GD.Print("Generated Chunk Mesh");
 	}
 
 	public override void InvokeCounterEvent(int count)

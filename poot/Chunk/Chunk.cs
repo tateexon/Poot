@@ -25,7 +25,8 @@ public partial class Chunk : MeshInstance3D
 			{
 				for (int z = 0; z < ChunkData.Size; z++)
 				{
-					if (data.Blocks[x, y, z] != BlockType.Air)
+					var b = data.Blocks[x, y, z];
+					if (!IsTransparent(b))
 					{
 						// Check neighboring blocks and determine if all required chunks are present
 						bool[] checks;
@@ -36,6 +37,16 @@ public partial class Chunk : MeshInstance3D
 						}
 						AddBlockMesh(new Vector3(x, y, z), data.Blocks[x, y, z], vertices, indices, uvs, ref vertexIndex, ref indexIndex,
 							checks);
+					}
+					else if (b == BlockType.Water)
+					{
+						// check if block above is air to see if we should add the top face.
+						bool check;
+						if (!TryCheckBlockAboveIsAir(x, y, z, data, worldChunks, out check))
+						{
+							return false;
+						}
+						AddBlockMesh(new Vector3(x, y, z), data.Blocks[x, y, z], vertices, indices, uvs, ref vertexIndex, ref indexIndex, new bool[6] { false, false, false, false, check, false });
 					}
 				}
 			}
@@ -55,6 +66,8 @@ public partial class Chunk : MeshInstance3D
 		material.TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
 		material.AnisotropyEnabled = false;
 		material.AlbedoTexture = BlockAtlasTexture.AtlasTexture;
+		material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+		material.DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Always;
 
 		Mesh = mesh;
 		Mesh.SurfaceSetMaterial(0, material);
@@ -84,6 +97,11 @@ public partial class Chunk : MeshInstance3D
 		return true;
 	}
 
+	private bool IsTransparent(BlockType blockType)
+	{
+		return blockType == BlockType.Air || blockType == BlockType.Water;
+	}
+
 	private Vector3I[] _directions = new Vector3I[]
 	{
 		new Vector3I(0, 0, -1), // Front
@@ -105,7 +123,7 @@ public partial class Chunk : MeshInstance3D
 
 			if (IsInsideChunk(neighborPosition))
 			{
-				drawFaces[i] = (data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z] == BlockType.Air);
+				drawFaces[i] = IsTransparent(data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z]);
 			}
 			else
 			{
@@ -113,7 +131,7 @@ public partial class Chunk : MeshInstance3D
 				if (worldChunks.TryGetValue(neighborChunkPosition, out ChunkData neighborChunk))
 				{
 					Vector3I localNeighborPosition = GetLocalPosition(neighborPosition);
-					drawFaces[i] = (neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z] == BlockType.Air);
+					drawFaces[i] = IsTransparent(neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z]);
 				}
 				else
 				{
@@ -127,18 +145,31 @@ public partial class Chunk : MeshInstance3D
 		return true;
 	}
 
-	// Check neighboring blocks to determine which faces to draw
-	//private bool[] CheckNeighboringBlocks(int x, int y, int z, ChunkData data, ThreadSafeDictionary<Vector3I, ChunkData> worldChunks)
-	//{
-	//	bool drawFront = (z == 0 || data.Blocks[x, y, z - 1] == BlockType.Air);
-	//	bool drawBack = (z == ChunkData.Size - 1 || data.Blocks[x, y, z + 1] == BlockType.Air);
-	//	bool drawLeft = (x == 0 || data.Blocks[x - 1, y, z] == BlockType.Air);
-	//	bool drawRight = (x == ChunkData.Size - 1 || data.Blocks[x + 1, y, z] == BlockType.Air);
-	//	bool drawTop = (y == ChunkData.Size - 1 || data.Blocks[x, y + 1, z] == BlockType.Air);
-	//	bool drawBottom = (y == 0 || data.Blocks[x, y - 1, z] == BlockType.Air);
-
-	//	return new bool[6] { drawFront, drawBack, drawLeft, drawRight, drawTop, drawBottom };
-	//}
+	private bool TryCheckBlockAboveIsAir(int x, int y, int z, ChunkData data, ThreadSafeDictionary<Vector3I, ChunkData> worldChunks, out bool drawTop)
+	{
+		drawTop = false;
+		Vector3I neighborPosition = new Vector3I(x, y, z) + _directions[(int)Face.Top];
+		if (IsInsideChunk(neighborPosition))
+		{
+			drawTop = data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z] == BlockType.Air;
+		}
+		else
+		{
+			Vector3I neighborChunkPosition = data.Location + GetChunkOffset(neighborPosition);
+			if (worldChunks.TryGetValue(neighborChunkPosition, out ChunkData neighborChunk))
+			{
+				Vector3I localNeighborPosition = GetLocalPosition(neighborPosition);
+				drawTop = neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z] == BlockType.Air;
+			}
+			else
+			{
+				// Required chunk is missing, return false to indicate failure
+				//GD.Print($"Missing terrain chunk {neighborChunkPosition}");
+				return false;
+			}
+		}
+		return true;
+	}
 
 	private bool IsInsideChunk(Vector3I position)
 	{

@@ -79,26 +79,54 @@ public struct ChunkData
 
 					if (cY > height)
 					{
-						Blocks[x, y, z] = BlockType.Air;
+						if (cY <= 0)
+						{
+							Blocks[x, y, z] = BlockType.Water;
+						}
+						else
+						{
+							Blocks[x, y, z] = BlockType.Air;
+						}
 					}
 					else if (cY == height)
 					{
-						Blocks[x, y, z] = BlockType.Grass;
+						if (height <= 0)
+						{
+							Blocks[x, y, z] = BlockType.Sand;
+						}
+						else
+						{
+							Blocks[x, y, z] = BlockType.Grass;
+						}
+
 					}
 					else if (cY >= height - 3)
 					{
-						Blocks[x, y, z] = BlockType.Dirt;
+						if (height <= 0)
+						{
+							Blocks[x, y, z] = BlockType.Stone;
+						}
+						else
+						{
+							Blocks[x, y, z] = BlockType.Dirt;
+						}
 					}
 					else
 					{
 						Blocks[x, y, z] = BlockType.Stone;
 					}
 
+
 					// Generate caves
 					float caveValue = caveNoiseF.GetNoise3D(cX, cY, cZ);
 					if (caveValue > 0.5f)
 					{
-						Blocks[x, y, z] = BlockType.Air;
+						var b = Blocks[x, y, z];
+						if (b != BlockType.Air && b != BlockType.Water)
+						{
+							Blocks[x, y, z] = BlockType.Air;
+						}
+
 					}
 				}
 			}

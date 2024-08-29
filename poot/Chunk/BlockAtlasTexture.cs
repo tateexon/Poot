@@ -12,6 +12,8 @@ public class BlockAtlasTexture
 		{ BlockType.Grass, (Texture2D)GD.Load("res://textures/grass.png") },
 		{ BlockType.Dirt, (Texture2D)GD.Load("res://textures/dirt.png") },
 		{ BlockType.Stone, (Texture2D)GD.Load("res://textures/stone.png") },
+		{ BlockType.Water, (Texture2D)GD.Load("res://textures/water.png") },
+		{ BlockType.Sand, (Texture2D)GD.Load("res://textures/sand.png") },
 	};
 	public static Texture2D CreateTextureAtlas(Dictionary<BlockType, Texture2D> blockTextures, out Dictionary<BlockType, Vector2[]> uvMappings)
 	{
