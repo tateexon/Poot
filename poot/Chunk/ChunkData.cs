@@ -60,11 +60,13 @@ public struct ChunkData
 
 	public void GenerateTerrain(ref int[,] heightMap)
 	{
-		FastNoiseLite caveNoiseF = new FastNoiseLite();
-		caveNoiseF.Seed = (int)Seed;
-		caveNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
-		caveNoiseF.FractalOctaves = 3;
-		caveNoiseF.Frequency = 0.02f;
+		//FastNoiseLite caveNoiseF = new FastNoiseLite();
+		//caveNoiseF.Seed = (int)Seed;
+		//caveNoiseF.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
+		//caveNoiseF.FractalOctaves = 3;
+		//caveNoiseF.Frequency = 0.02f;
+
+		float[,,] caveMap = FetchCaveMap();
 
 		for (int x = 0; x < Size; x++)
 		{
@@ -118,8 +120,10 @@ public struct ChunkData
 
 
 					// Generate caves
-					float caveValue = caveNoiseF.GetNoise3D(cX, cY, cZ);
-					if (caveValue > 0.5f)
+					//float caveValue = caveNoiseF.GetNoise3D(cX, cY, cZ);
+					float caveValue = caveMap[x, y, z];
+					//if (caveValue > 0.5f)
+					if (caveValue > 0.7f)
 					{
 						var b = Blocks[x, y, z];
 						if (b != BlockType.Air && b != BlockType.Water)
@@ -139,7 +143,7 @@ public struct ChunkData
 	public float[,] FetchHeightMap()
 	{
 		float[,] heightMap = new float[Size, Size];
-		string url = $"http://127.0.0.1:8080/height_two/{Seed}/{Location.X}/{Location.Z}";
+		string url = $"http://127.0.0.1:8080/height/{Seed}/{Location.X}/{Location.Z}";
 		try
 		{
 			// Send the request and get the response synchronously
@@ -181,5 +185,54 @@ public struct ChunkData
 		}
 
 		return heightMap;
+	}
+
+	public float[,,] FetchCaveMap()
+	{
+		float[,,] caveMap = new float[Size, Size, Size];
+		string url = $"http://127.0.0.1:8080/cave/{Seed}/{Location.X}/{Location.Y}/{Location.Z}";
+		try
+		{
+			// Send the request and get the response synchronously
+			string responseText = httpClient.GetStringAsync(url).Result;
+
+			// Parse the response into a 2D float array
+			caveMap = ParseCaveMap(responseText);
+		}
+		catch (HttpRequestException e)
+		{
+			// Handle any errors during the HTTP request
+			Console.WriteLine($"Request error: {e.Message}");
+			return null;
+		}
+
+		return caveMap;
+	}
+
+	private float[,,] ParseCaveMap(string data)
+	{
+		float[,,] caveMap = new float[Size, Size, Size];
+		string[] values = data.Trim().Split(' ');
+		int index = 0;
+		for (int x = 0; x < Size; x++)
+		{
+			for (int y = 0; y < Size; y++)
+			{
+				for (int z = 0; z < Size; z++)
+				{
+					if (float.TryParse(values[index], out float height))
+					{
+						caveMap[x, y, z] = (height + 1) / 2;
+					}
+					else
+					{
+						GD.PrintErr($"Failed to parse value at line {y + 1}, column {x + 1}: {values[x]}");
+					}
+					index++;
+				}
+			}
+		}
+
+		return caveMap;
 	}
 }

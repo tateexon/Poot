@@ -3,7 +3,7 @@ build:
 	cargo build
 
 .PHONY: run
-run:
+run: build
 	cargo run
 
 .PHONY: test
