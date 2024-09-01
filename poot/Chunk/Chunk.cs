@@ -52,7 +52,17 @@ public partial class Chunk : MeshInstance3D
 			}
 		}
 
+		if (vertexIndex == 0)
+		{
+			data.IsDirty = false;
+			return true;
+		}
+
 		//GD.Print($"Vertice count {vertices.Length}");
+		System.Array.Resize(ref vertices, vertexIndex);
+		System.Array.Resize(ref indices, indexIndex);
+		System.Array.Resize(ref uvs, vertexIndex);
+		//GD.Print($"{vertexIndex} {indexIndex}");
 
 		ArrayMesh mesh = new ArrayMesh();
 		Array arrays = new Array();

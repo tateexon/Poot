@@ -122,7 +122,6 @@ public struct ChunkData
 					// Generate caves
 					//float caveValue = caveNoiseF.GetNoise3D(cX, cY, cZ);
 					float caveValue = caveMap[x, y, z];
-					//if (caveValue > 0.5f)
 					if (caveValue > 0.7f)
 					{
 						var b = Blocks[x, y, z];
@@ -165,15 +164,16 @@ public struct ChunkData
 
 	private float[,] ParseHeightMap(string data)
 	{
-		string[] lines = data.Split('\n');
+		//string[] lines = data.Split('\n');
 		float[,] heightMap = new float[Size, Size];
-
+		string[] values = data.Trim().Split(' ');
+		int index = 0;
 		for (int y = 0; y < Size; y++)
 		{
-			string[] values = lines[y].Trim().Split(' ');
+			//string[] values = lines[y].Trim().Split(' ');
 			for (int x = 0; x < Size; x++)
 			{
-				if (float.TryParse(values[x], out float height))
+				if (float.TryParse(values[index]/*values[x]*/, out float height))
 				{
 					heightMap[x, y] = height;
 				}
@@ -181,6 +181,7 @@ public struct ChunkData
 				{
 					GD.PrintErr($"Failed to parse value at line {y + 1}, column {x + 1}: {values[x]}");
 				}
+				index++;
 			}
 		}
 

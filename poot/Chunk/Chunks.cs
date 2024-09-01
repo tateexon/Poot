@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 
 public partial class Chunks : Node3D
@@ -12,13 +13,17 @@ public partial class Chunks : Node3D
 	private int _maxChunksRenderedPerFrame = 1000;
 	private int _maxChunksRemovedPerFrame = 1000;
 
-	private const int _WORKER_THREADS = 5;
+	private const int _TERRAIN_WORKER_THREADS = 1;
+	private const int _MESH_WORKER_THREADS = 5;
 	private const float _CUBE_DIAGONAL = 1.732051f; //Mathf.Sqrt(3);
 
 	[Export] public PackedScene chunkScene;
 
+	public static Vector3I Dimensions = new Vector3I(25, 12, 25);
 	//public static Vector3I Dimensions = new Vector3I(18, 9, 18);
-	public static Vector3I Dimensions = new Vector3I(9, 6, 9);
+	//public static Vector3I Dimensions = new Vector3I(9, 6, 9);
+	//public static Vector3I Dimensions = new Vector3I(3, 3, 3);
+
 
 	private float _maxGenerateDistance;
 	private float _maxRenderDistance;
@@ -58,13 +63,15 @@ public partial class Chunks : Node3D
 		GD.Print($"render {_maxRenderDistance}");
 		GD.Print($"generate {_maxGenerateDistance}");
 		GD.Print($"remove {_maxRemoveDistance}");
+		GD.Print($"{Int32.MaxValue}");
+		GD.Print($"{32*32*32}");
 
 
 		// start worker threads
-		_terrainWorkerQueue = new TerrainWorker(_WORKER_THREADS);
+		_terrainWorkerQueue = new TerrainWorker(_TERRAIN_WORKER_THREADS);
 		_terrainWorkerQueue.StartWorkerThreads();
 
-		_meshWorkerQueue = new MeshWorker(_WORKER_THREADS);
+		_meshWorkerQueue = new MeshWorker(_MESH_WORKER_THREADS);
 		_meshWorkerQueue.ChunkScene = chunkScene;
 		_meshWorkerQueue.StartWorkerThreads();
 
