@@ -25,7 +25,8 @@ public partial class Chunk : MeshInstance3D
 			{
 				for (int z = 0; z < ChunkData.Size; z++)
 				{
-					var b = data.Blocks[x, y, z];
+					var v = new Vector3(x, y, z);
+					var b = data.Blocks[ChunkData.Get3dIndex(v, ChunkData.Size)];
 					if (!IsTransparent(b))
 					{
 						// Check neighboring blocks and determine if all required chunks are present
@@ -35,7 +36,7 @@ public partial class Chunk : MeshInstance3D
 							// If a required chunk is missing, return false to indicate failure
 							return false;
 						}
-						AddBlockMesh(new Vector3(x, y, z), data.Blocks[x, y, z], vertices, indices, uvs, ref vertexIndex, ref indexIndex,
+						AddBlockMesh(v, b, vertices, indices, uvs, ref vertexIndex, ref indexIndex,
 							checks);
 					}
 					else if (b == BlockType.Water)
@@ -46,7 +47,7 @@ public partial class Chunk : MeshInstance3D
 						{
 							return false;
 						}
-						AddBlockMesh(new Vector3(x, y, z), data.Blocks[x, y, z], vertices, indices, uvs, ref vertexIndex, ref indexIndex, new bool[6] { false, false, false, false, check, false });
+						AddBlockMesh(v, b, vertices, indices, uvs, ref vertexIndex, ref indexIndex, new bool[6] { false, false, false, false, check, false });
 					}
 				}
 			}
@@ -133,7 +134,7 @@ public partial class Chunk : MeshInstance3D
 
 			if (IsInsideChunk(neighborPosition))
 			{
-				drawFaces[i] = IsTransparent(data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z]);
+				drawFaces[i] = IsTransparent(data.Blocks[ChunkData.Get3dIndex(neighborPosition, ChunkData.Size)]);
 			}
 			else
 			{
@@ -141,7 +142,7 @@ public partial class Chunk : MeshInstance3D
 				if (worldChunks.TryGetValue(neighborChunkPosition, out ChunkData neighborChunk))
 				{
 					Vector3I localNeighborPosition = GetLocalPosition(neighborPosition);
-					drawFaces[i] = IsTransparent(neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z]);
+					drawFaces[i] = IsTransparent(neighborChunk.Blocks[ChunkData.Get3dIndex(localNeighborPosition, ChunkData.Size)]);
 				}
 				else
 				{
@@ -161,7 +162,7 @@ public partial class Chunk : MeshInstance3D
 		Vector3I neighborPosition = new Vector3I(x, y, z) + _directions[(int)Face.Top];
 		if (IsInsideChunk(neighborPosition))
 		{
-			drawTop = data.Blocks[neighborPosition.X, neighborPosition.Y, neighborPosition.Z] == BlockType.Air;
+			drawTop = data.Blocks[ChunkData.Get3dIndex(neighborPosition, ChunkData.Size)] == BlockType.Air;
 		}
 		else
 		{
@@ -169,7 +170,7 @@ public partial class Chunk : MeshInstance3D
 			if (worldChunks.TryGetValue(neighborChunkPosition, out ChunkData neighborChunk))
 			{
 				Vector3I localNeighborPosition = GetLocalPosition(neighborPosition);
-				drawTop = neighborChunk.Blocks[localNeighborPosition.X, localNeighborPosition.Y, localNeighborPosition.Z] == BlockType.Air;
+				drawTop = neighborChunk.Blocks[ChunkData.Get3dIndex(localNeighborPosition, ChunkData.Size)] == BlockType.Air;
 			}
 			else
 			{

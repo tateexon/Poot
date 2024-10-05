@@ -19,7 +19,7 @@ public class TerrainWorker : WorkerQueue<Vector3I>
 			if (Chunks.heightMaps.SafeContainsKey(item)) { return; };
 			Chunks.heightMaps.SafeAdd(item, data.HeightFromFloat(hh));
 		}
-		int[,] heightMap = Chunks.heightMaps.SafeGet(item);
+		int[] heightMap = Chunks.heightMaps.SafeGet(item);
 		data.GenerateTerrain(ref heightMap);
 		if (Chunks.ChunksData.SafeContainsKey(item)) { return; }
 		if (Chunks.ChunksReadyForMesh.SafeContains(item)) { return; }

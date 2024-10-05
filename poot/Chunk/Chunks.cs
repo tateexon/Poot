@@ -6,7 +6,7 @@ public partial class Chunks : Node3D
 {
 	public static ThreadSafeDictionary<Vector3I, Chunk> ChunksMesh = new ThreadSafeDictionary<Vector3I, Chunk>();
 	public static ThreadSafeDictionary<Vector3I, ChunkData> ChunksData = new ThreadSafeDictionary<Vector3I, ChunkData>();
-	public static ThreadSafeDictionary<Vector3I, int[,]> heightMaps = new ThreadSafeDictionary<Vector3I, int[,]>();
+	public static ThreadSafeDictionary<Vector3I, int[]> heightMaps = new ThreadSafeDictionary<Vector3I, int[]>();
 	public static ThreadSafeList<Vector3I> ChunksReadyForMesh = new ThreadSafeList<Vector3I>();
 	public static ThreadSafeList<Vector3I> ChunksReadyToShow = new ThreadSafeList<Vector3I>();
 
@@ -75,7 +75,7 @@ public partial class Chunks : Node3D
 		_meshWorkerQueue.ChunkScene = chunkScene;
 		_meshWorkerQueue.StartWorkerThreads();
 
-		LoadNewChunksToGenerate(Camera.GlobalPosition, Dimensions);
+		LoadNewChunksToGenerate(GetCameraPosition(), Dimensions);
 		_firstGetNeededChunks = false;
 	}
 
@@ -94,12 +94,19 @@ public partial class Chunks : Node3D
 		if (tickCounter >= tickEnd || tickCounter == -1)
 		{
 			tickCounter = 0;
-			LoadNewChunksToGenerate(Camera.GlobalPosition, Dimensions);
-			LoadChunksToRender(Camera.GlobalPosition, Dimensions);
+			var cameraPosition = GetCameraPosition();
+			LoadNewChunksToGenerate(cameraPosition, Dimensions);
+			LoadChunksToRender(cameraPosition, Dimensions);
 			AddChunksFromQueue();
-			RemoveChunksOutOfRange(Camera.GlobalPosition, Dimensions);
+			RemoveChunksOutOfRange(cameraPosition, Dimensions);
 		}
 		tickCounter++;
+	}
+
+	private Vector3 GetCameraPosition()
+	{
+		return Camera.GlobalPosition;
+		//return new Vector3(33,0,0);
 	}
 
 	private void LoadNewChunksToGenerate(Vector3 centerChunk, Vector3I dimensions)

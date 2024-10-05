@@ -5,6 +5,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 // Coordinates passed as uniform
 layout(set = 0, binding = 0) uniform UBO {
     vec2 coordinates;
+    float seed;
 } ubo;
 
 // Output heightmap buffer
@@ -12,81 +13,69 @@ layout(set = 0, binding = 1) buffer Heightmap {
     float data[];
 } heightmap;
 
-//
-//  Wombat
-//  An efficient texture-free GLSL procedural noise library
-//  Source: https://github.com/BrianSharpe/Wombat
-//  Derived from: https://github.com/BrianSharpe/GPU-Noise-Lib
-//
-//  I'm not one for copyrights.  Use the code however you wish.
-//  All I ask is that credit be given back to the blog or myself when appropriate.
-//  And also to let me know if you come up with any changes, improvements, thoughts or interesting uses for this stuff. :)
-//  Thanks!
-//
-//  Brian Sharpe
-//  brisharpe CIRCLE_A yahoo DOT com
-//  http://briansharpe.wordpress.com
-//  https://github.com/BrianSharpe
-//
 
-//
-//  Perlin Noise 2D
-//  Return value range of -1.0->1.0
-//
-float Perlin2D( vec2 P )
-{
 
-    // establish our grid cell and unit position
+// Improved hash function using bitwise operations
+float hash(vec2 p, float seed) {
+    // Incorporate seed into position
+    p += seed;
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+vec2 gradient(vec2 p, float seed) {
+    float h = hash(p, seed) * 4.0; // Four possible gradients
+    float angle = h * 1.57079632679; // h * (PI/2)
+    return vec2(cos(angle), sin(angle));
+}
+
+// Update Perlin2D to accept seed
+float Perlin2D(vec2 P, float seed) {
+    // Grid cell coordinates
     vec2 Pi = floor(P);
-    vec4 Pf_Pfmin1 = P.xyxy - vec4( Pi, Pi + 1.0 );
+    // Local coordinates within cell
+    vec2 Pf = fract(P);
 
-    // calculate the hash
-    vec4 Pt = vec4( Pi.xy, Pi.xy + 1.0 );
-    Pt = Pt - floor(Pt * ( 1.0 / 71.0 )) * 71.0;
-    Pt += vec2( 26.0, 161.0 ).xyxy;
-    Pt *= Pt;
-    Pt = Pt.xzxz * Pt.yyww;
-    vec4 hash_x = fract( Pt * ( 1.0 / 951.135664 ) );
-    vec4 hash_y = fract( Pt * ( 1.0 / 642.949883 ) );
+    // Get gradients at cell corners with seed
+    vec2 g00 = gradient(Pi, seed);
+    vec2 g10 = gradient(Pi + vec2(1.0, 0.0), seed);
+    vec2 g01 = gradient(Pi + vec2(0.0, 1.0), seed);
+    vec2 g11 = gradient(Pi + vec2(1.0, 1.0), seed);
 
-    // calculate the gradient results
-    vec4 grad_x = hash_x - 0.49999;
-    vec4 grad_y = hash_y - 0.49999;
-    vec4 grad_results = inversesqrt( grad_x * grad_x + grad_y * grad_y ) * ( grad_x * Pf_Pfmin1.xzxz + grad_y * Pf_Pfmin1.yyww );
+    // Compute the dot product between gradient vectors and distance vectors
+    float n00 = dot(g00, Pf - vec2(0.0, 0.0));
+    float n10 = dot(g10, Pf - vec2(1.0, 0.0));
+    float n01 = dot(g01, Pf - vec2(0.0, 1.0));
+    float n11 = dot(g11, Pf - vec2(1.0, 1.0));
 
-    // Classic Perlin Interpolation
-    grad_results *= 1.4142135623730950488016887242097;  // scale things to a strict -1.0->1.0 range  *= 1.0/sqrt(0.5)
-    vec2 blend = Pf_Pfmin1.xy * Pf_Pfmin1.xy * Pf_Pfmin1.xy * (Pf_Pfmin1.xy * (Pf_Pfmin1.xy * 6.0 - 15.0) + 10.0);
-    vec4 blend2 = vec4( blend, vec2( 1.0 - blend ) );
-    return dot( grad_results, blend2.zxzx * blend2.wwyy );
+    // Smooth interpolation using the fade function
+    vec2 fade_xy = Pf * Pf * Pf * (Pf * (Pf * 6.0 - 15.0) + 10.0);
+
+    // Interpolate along x
+    float nx0 = mix(n00, n10, fade_xy.x);
+    float nx1 = mix(n01, n11, fade_xy.x);
+
+    // Interpolate along y
+    float nxy = mix(nx0, nx1, fade_xy.y);
+
+    return nxy;
 }
 
 void main() {
+    int width = 1024;
     uvec2 id = gl_GlobalInvocationID.xy;
 
-    float xx = id.x;
-    if (ubo.coordinates.x != 0) {
-        xx = id.x / ubo.coordinates.x;
-    }
+    // Compute the global position
+    vec2 globalPos = vec2(id) + ubo.coordinates;
 
-    float yy = id.y;
-    if (ubo.coordinates.y != 0) {
-        yy = id.y / ubo.coordinates.y;
-    }
-
-    vec2 uv = vec2(xx, yy);
-
-    if (uv.x == 0.0) {
-        uv.x += 0.0001;  // Small perturbation
-    }
-
-    if (uv.y == 0.0) {
-        uv.y += 0.0001;  // Small perturbation
-    }
+    // Apply a scaling factor
+    float scale = 0.02; // Adjust this value to control noise frequency
+    vec2 uv = globalPos * scale;
 
 
     // Compute Perlin noise or other function using uv
-    float value = Perlin2D(uv); // Assuming you have a Perlin2D function in the shader
+    float value = Perlin2D(uv, ubo.seed);
 
-    heightmap.data[id.y * 1024 + id.x] = value;
+    heightmap.data[(id.y * width) + id.x] = value;
 }

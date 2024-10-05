@@ -353,9 +353,10 @@ impl<'a> ComputeShader<'a> {
         shader: vk::ShaderModule,
         x_coord: f32,
         y_coord: f32,
+        seed: f32,
     ) -> ComputeShader {
         // 5. Create Buffers
-        let ubo_buf: Buffer = Buffer::create_uniform_buffer(hardware, x_coord, y_coord);
+        let ubo_buf: Buffer = Buffer::create_uniform_buffer(hardware, x_coord, y_coord, seed);
         let heightmap_buf: Buffer = Buffer::create_storage_buffer(hardware);
 
         // 6. Create Descriptor Set Layout and Pipeline Layout

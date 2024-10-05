@@ -11,13 +11,15 @@ pub struct Buffer {
 #[derive(Copy, Clone)]
 struct UniformBufferObject {
     coordinates: [f32; 2],
+    seed: f32,
 }
 
 impl Buffer {
     // Create Uniform Buffer
-    pub fn create_uniform_buffer(d: &Hardware, x_coord: f32, y_coord: f32) -> Buffer {
+    pub fn create_uniform_buffer(d: &Hardware, x_coord: f32, y_coord: f32, seed: f32) -> Buffer {
         let ubo = UniformBufferObject {
             coordinates: [x_coord, y_coord],
+            seed,
         };
         let ubo_size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
 
